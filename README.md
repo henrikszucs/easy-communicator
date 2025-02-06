@@ -6,9 +6,9 @@ JavaScript library to handle one or two way communication in any type of channel
 
 Copy and import the following file
 
-[a relative link](./src/communicator.js)
-or 
-[a relative link](./src/communicator.min.js)
+[./src/communicator.js](./src/communicator.js)\
+or\
+[./src/communicator.min.js](./src/communicator.min.js)
 
 ## Usage
 ```
