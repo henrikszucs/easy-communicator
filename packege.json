@@ -1,20 +1,28 @@
 {
-  "name": "easy-communicator",
-  "version": "0.0.0.1",
-  "description": "An API documentation generator for JavaScript.",
-  "keywords": [
-    "javascript",
-    "communication"
-  ],
-  "license": "GPL-2.0 license",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/henrikszucs/easy-communicator"
-  },
-  "maintainers": [
-    {
-      "name": "Henrik Szucs",
-      "email": "henrikszucs6@gmail.com"
+    "name": "easy-communicator",
+    "version": "0.0.0.1",
+    "description": "An API documentation generator for JavaScript.",
+    "keywords": [
+        "javascript",
+        "communication"
+    ],
+    "license": "GPL-2.0 license",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/henrikszucs/easy-communicator"
+    },
+    "bugs": "https://github.com/henrikszucs/easy-communicator/issues",
+    "maintainers": [
+        {
+            "name": "Henrik Szucs",
+            "email": "henrikszucs6@gmail.com"
+        }
+    ],
+    "scripts": {
+        "compile": "echo \"Error: no test specified\" && exit 1",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "dependencies": {
+        "jsdoc": "^3.6.6"
     }
-  ]
 }
