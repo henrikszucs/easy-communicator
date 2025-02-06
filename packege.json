@@ -1,6 +1,6 @@
 {
     "name": "easy-communicator",
-    "version": "0.0.0.1",
+    "version": "0.0.1",
     "description": "An API documentation generator for JavaScript.",
     "keywords": [
         "javascript",
@@ -23,6 +23,7 @@
         "test": "echo \"Error: no test specified\" && exit 1"
     },
     "dependencies": {
-        "jsdoc": "^3.6.6"
+        "clean-jsdoc-theme": "^4.0.0",
+        "uglify-js": "^3.0.28"
     }
 }
