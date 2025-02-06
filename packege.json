@@ -18,12 +18,15 @@
             "email": "henrikszucs6@gmail.com"
         }
     ],
+    "dependencies": {
+        "clean-jsdoc-theme": "^4.0.0",
+        "uglify-js": "^3.0.28"
+    },
     "scripts": {
         "compile": "echo \"Error: no test specified\" && exit 1",
         "test": "echo \"Error: no test specified\" && exit 1"
     },
-    "dependencies": {
-        "clean-jsdoc-theme": "^4.0.0",
-        "uglify-js": "^3.0.28"
+    "exports": {
+        ".": "./src/communicator.js"
     }
 }

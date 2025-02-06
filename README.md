@@ -4,7 +4,7 @@ JavaScript library to handle one or two way communication in any type of channel
 
 ## Install
 
-Copy and import the following file
+Copy and import the following file:
 
 [./src/communicator.js](./src/communicator.js)\
 or\
