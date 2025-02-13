@@ -19,13 +19,14 @@
         }
     ],
     "dependencies": {
-        "clean-jsdoc-theme": "^4.0.0",
-        "uglify-js": "^3.0.28"
+        "clean-jsdoc-theme": "=4.3.0"
     },
     "scripts": {
         "compile": "node dev/compile.js",
+        "compile-and-test": "node dev/compile.js && node dev/test.js",
         "test": "node dev/compile.js"
     },
+    "type": "module",
     "exports": {
         ".": "./src/communicator.js"
     }
