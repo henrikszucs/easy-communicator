@@ -1,6 +1,6 @@
 "use strict";
 
-import {Communicator} from "../src/communicator.js";
+import {Communicator} from "/src/communicator.js";
 
 //tests
 (async function() {
