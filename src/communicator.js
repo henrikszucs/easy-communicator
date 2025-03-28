@@ -1,10 +1,5 @@
 "use strict";
 
-//cd Downloads/git/easy-communicator
-
-//todo: reformat to UglifyJS
-//todo: add sender error handling
-
 //constant values 
 const errors = {
     TIMEOUT: "timeout",         // error occurs if the data transfer is not completed in time
