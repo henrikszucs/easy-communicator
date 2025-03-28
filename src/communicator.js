@@ -1,105 +1,62 @@
 "use strict";
 
-/**
- * An pending communication object
- * @class
- */
-const Message = class {
-    //for inner usage
-    packetSize;
-    packetTimeout;
-    packetRetry;
-    sendThreads;
+//cd Downloads/git/easy-communicator
 
-    onreceive = function() {};
-    packetCallbacks = new Map();
-    onaborts = new Set();
-    onFinish = function() {};
+//todo: reformat to UglifyJS
+//todo: add sender error handling
 
-    messageId;
-    timeoutId = -1;
-    interactTimeoutId = -1;
-    isAnswer = false;
-    answerFor = 0;
-    packetCount = Infinity;
-    packets = new Map();
-    process;
-
-    constructor() {
-
-    };
-
-    //
-    //public API methods
-    //
-    //events
-    onprogress = function(message) {};
-
-    //methods
-    progress = 0;
-    error = "";
-    data;
-    isInvoke = false;
-    send = undefined;
-    invoke = undefined;
-    abort() {
-        this.error = "abort";
-        for (const cb of this.onaborts) {
-            cb();
-        }
-    };
-    async wait() {
-        return this.process;
-    };
+//constant values 
+const errors = {
+    TIMEOUT: "timeout",         // error occurs if the data transfer is not completed in time
+    INACTIVE: "inactive",       // error occurs if between the packet transfers there is no interaction
+    ABORT: "abort",             // error occurs if local side abort the process
+    REJECT: "reject",           // error occurs if other side abort the process
+    TRANSFER_SEND: "send",      // error occurs if cannot send data with sender function
+    TRANSFER_RECEIVE: "receive" // error occurs if exceed the receive attempts number
 };
 
-/**
- * Communication channel object
- * @class
- */
+//main class
 const Communicator = class {
-    UID = 1; //random positive number to decide the side
+    UID = 1;                    //random positive number to decide the side
     sender = async function(data, transfer) {}; //sender function
-    interactTimeout = 5000; //cancel if not happen any transmission in time
+    interactTimeout = 5000;     //cancel if not happen any transmission in time
 
-    timeout = 5000; //the whole invoke process time limit
-    packetSize = 16384; //max size of each packet
-    packetTimeout = 1000; //timeout for packet acknowledgment
-    packetRetry = Infinity; //retry attemts number for one packets
-    sendThreads = 16; //packets that can be sent in same time
+    timeout = 5000;             //the whole invoke process time limit
+    packetSize = 16384;         //max size of each packet
+    packetTimeout = 1000;       //timeout for packet acknowledgment
+    packetRetry = Infinity;     //retry attemts number for one packets
+    sendThreads = 16;           //packets that can be sent in same time
 
-    timeOffset = 0;
-    timeSyncIntervalId = -1;
-    timePromise;
-    timeResolve;
+    timeOffset = 0;             //time offset between the sender and receiver
+    timeSyncIntervalId = -1;    //time sync interval id
+    timePromise;                //time sync promise
+    timeResolve;                //time sync callback
 
-    sidePromise;
-    sideResolve;
+    sidePromise;                //side sync promise
+    sideResolve;                //side sync callback
 
-    messageId = 0;
-    myReminder = 0;
-    messages = new Map();
+    messageId = 0;              //the message id for the next message
+    myReminder = 0;             //reminder of the UID what I am
+    messages = new Map();       //all messages that are in process
 
-    ERROR_TIMEOUT = "timeout"; // when run out of the time
-    ERROR_INACTIVE = "inactive"; // when no answer for long time
-    ERROR_ABORT = "abort"; // local abort
-    ERROR_REJECT = "reject"; // remote abort
-    ERROR_TRANSFER_SEND = "send"; // cannot send
-    ERROR_TRANSFER_RECEIVE = "receive"; // answer not arrived
+    onincoming = function(message) {};  // trigger if incoming new message
+    onsend = function(data) {};         // trigger if incomed and finished new send message
+    oninvoke = function(message) {};    // trigger if incomed and finished new invoke message
 
-    onincoming = function(message) {};
-    onsend = function(data) {};
-    oninvoke = function(message) {};
+    ERROR = errors;     //error constants
 
-    
-
-    // methods: send, invoke, receive,
-    // events: onincoming, onsend, oninvoke
-    // methods (process):  abort, wait, send, invoke
-    // events (process):  progress
+    // Public
+    // setup API: configure, release, timeSyncStart, timeSyncStop, timeSync
+    // com API: send, invoke, receive
+    // trigger API: onIncoming, onSend, onInvoke
     constructor(config) {
+        //initial UID setup
+        this.UID = Math.floor(Math.random() * 4294967294) + 1; // betwwen 1 and (32 bit-1)
+
+        //set configuration
         this.configure(config);
     };
+
     configure(config) {
         //set variables
         if (typeof config !== "object") {
@@ -107,7 +64,7 @@ const Communicator = class {
         }
 
         //set required params and static params
-        if (typeof config["sender"] !== "undefined") {
+        if (config["sender"] !== "undefined") {
             if (typeof config["sender"] === "function") {
                 this.sender = config["sender"];
             } else {
@@ -160,47 +117,52 @@ const Communicator = class {
                 throw new Error("'sendThreads' option must be number");
             }
         }
+        if (typeof config["timeOffset"] !== "undefined") {
+            if (typeof config["timeOffset"] === "number") {
+                this.timeOffset = config["timeOffset"];
+            } else {
+                throw new Error("'timeOffset' option must be number");
+            }
+        }
 
-        //initial setup
-        this.UID = Math.floor(Math.random() * 4294967294) + 1; // betwwen 1 and (32 bit-1)
     };
     release() {
         //free up every pointer that point to non internal variables
+        clearInterval(this.timeSyncIntervalId);
         this.sender = async function(data, transfer) {};
         this.messages = new Map();
     };
 
-
-    TimeSyncStart(resyncTime = 60000) {
-        this.TimeSyncStop();
+    timeSyncStart(resyncTime=60000) {
+        clearInterval(this.timeSyncIntervalId);
         this.SyncTime();
         this.timeSyncIntervalId = setInterval(() => {
             this.SyncTime();
         }, resyncTime);
     };
-    TimeSyncStop() {
+    timeSyncStop() {
         clearInterval(this.timeSyncIntervalId);
     };
-    async TimeSync(retry = 5, patience = this.interactTimeout) {
+    async timeSync(retry=5, patience=this.interactTimeout) {
         //check runnig request
         if (this.timePromise !== undefined) {
             return this.timePromise;
         }
 
         //start request
-        this.timePromise = this.TimeSyncRaw(retry, patience);
+        this.timePromise = this.timeSyncRaw(retry, patience);
         const isSuccess = await this.timePromise;
         this.timePromise = undefined;
         return isSuccess;
     };
-    async TimeSyncRaw(retry, patience) {
+    async timeSyncRaw(retry, patience) {
         let isSuccess = false;
         let trying = 0;
         do {
             trying++;
 
             isSuccess = await new Promise((resolve) => {
-                this.TimeSyncResolve(resolve, patience);
+                this.timeSyncResolve(resolve, patience);
 
                 //send
                 const buffer = new ArrayBuffer(17);
@@ -214,13 +176,13 @@ const Communicator = class {
 
         if (isSuccess === false) {
             isSuccess = await new Promise((resolve) => {
-                this.TimeSyncResolve(resolve, this.interactTimeout);
+                this.timeSyncResolve(resolve, this.interactTimeout);
             });
         }
 
         return isSuccess;
     };
-    TimeSyncResolve(resolve, patience) {
+    timeSyncResolve(resolve, patience) {
         //timeout
         const timeout = setTimeout(() => {
             this.timeResolve = undefined;
@@ -235,25 +197,25 @@ const Communicator = class {
         };
     };
 
-    async SideSync(retry = 5, patience = this.interactTimeout) {
+    async sideSync(retry = 5, patience=this.interactTimeout) {
         //check runnig request
         if (this.sidePromise !== undefined) {
             return this.sidePromise;
         }
 
         //start request
-        this.sidePromise = this.SideSyncRaw(retry, patience);
+        this.sidePromise = this.sideSyncRaw(retry, patience);
         const isSuccess = await this.sidePromise;
         this.sidePromise = undefined;
         return isSuccess;
     };
-    async SideSyncRaw(retry, patience) {
+    async sideSyncRaw(retry, patience) {
         let isSuccess = false;
         let trying = 0;
         do {
             trying++;
             isSuccess = await new Promise((resolve) => {
-                this.SideSyncResolve(resolve, patience);
+                this.sideSyncResolve(resolve, patience);
 
                 //send
                 const buffer = new ArrayBuffer(13);
@@ -268,13 +230,13 @@ const Communicator = class {
 
         if (isSuccess === false) {
             isSuccess = await new Promise((resolve) => {
-                this.SideSyncResolve(resolve, this.interactTimeout);
+                this.sideSyncResolve(resolve, this.interactTimeout);
             });
         }
 
         return isSuccess;
     };
-    SideSyncResolve(resolve, patience) {
+    sideSyncResolve(resolve, patience) {
         //timeout
         const timeout = setTimeout(() => {
             this.sideResolve = undefined;
@@ -301,15 +263,16 @@ const Communicator = class {
     };
 
 
+
     send(msg, transfer = [], timeout, options) {
         //create
-        const messageObj = this.MessageCreate();
+        const messageObj = this.messageCreate();
 
         //set params
-        this.MessageSet(messageObj, options, false);
+        this.messageSet(messageObj, options, false);
 
         //create pending process
-        messageObj.process = this.sendRaw(messageObj, msg, transfer, timeout);
+        messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
 
         return messageObj;
     };
@@ -323,27 +286,27 @@ const Communicator = class {
             timeout = this.timeout;
         }
         messageObj.timeoutId = setTimeout(() => {
-            messageObj.error = this.ERROR_TIMEOUT;
+            messageObj.error = this.ERROR.TIMEOUT;
             for (const cb of messageObj.onaborts) {
                 cb();
             }
         }, timeout);
 
         //send data
-        await this.MessageSend(messageObj, msg, transfer);
-        this.MessageFree(messageObj);
+        await this.messageSend(messageObj, msg, transfer);
+        this.messageFree(messageObj);
 
         return messageObj;
     };
     invoke(msg, transfer = [], timeout, options) {
         //create
-        const messageObj = this.MessageCreate();
+        const messageObj = this.messageCreate();
 
         //set params
-        this.MessageSet(messageObj, options, true);
+        this.messageSet(messageObj, options, true);
 
         //create pending process
-        messageObj.process = this.invokeRaw(messageObj, msg, transfer, timeout);
+        messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
 
         return messageObj;
     };
@@ -358,7 +321,7 @@ const Communicator = class {
                 timeout = this.timeout;
             }
             messageObj.timeoutId = setTimeout(() => {
-                messageObj.error = this.ERROR_TIMEOUT;
+                messageObj.error = this.ERROR.TIMEOUT;
                 for (const cb of messageObj.onaborts) {
                     cb();
                 }
@@ -368,29 +331,31 @@ const Communicator = class {
             messageObj.onaborts.add(() => {
                 console.log("aborted");
                 console.log(messageObj.error);
-                this.MessageFree(messageObj);
+                this.messageFree(messageObj);
                 resolve([messageObj.error, messageObj.data, messageObj.isInvoke]);
             });
 
             //or exit if invoke finish
-            messageObj.onFinish = () => {
-                this.MessageFree(messageObj);
+            messageObj.onfinish = () => {
+                this.messageFree(messageObj);
                 messageObj.send = (msg, transfer, timeout, options) => {
-                    this.MessageSet(messageObj, options, false);
-                    messageObj.process = this.sendRaw(messageObj, msg, transfer, timeout);
+                    this.messageSet(messageObj, options, false);
+                    messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
+                    return messageObj;
                 };
                 messageObj.invoke = (msg, transfer, timeout, options) => {
-                    this.MessageSet(messageObj, options, true);
-                    console.log("a");
-                    messageObj.process = this.invokeRaw(messageObj, msg, transfer, timeout);
+                    this.messageSet(messageObj, options, true);
+                    messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
+                    return messageObj;
                 };
                 resolve([messageObj.error, messageObj.data, messageObj.isInvoke]);
             };
 
             //send data
-            this.MessageSend(messageObj, msg, transfer);
+            this.messageSend(messageObj, msg, transfer);
         });
     }
+
 
 
     async receive(msg) {
@@ -621,7 +586,7 @@ const Communicator = class {
         // solve if not exist
         if (messageObj === undefined) {
             if (isAnswer) {
-                console.log(isAnswer);
+                //console.log(isAnswer);
                 // check the parent object (and not moved yet)
                 messageObj = this.messages.get(answerFor);
 
@@ -650,13 +615,13 @@ const Communicator = class {
                 this.messages.set(messageId, messageObj);
 
                 //create wait function
-                messageObj.process = new Promise((resolve) => {
+                messageObj.pending = new Promise((resolve) => {
                     messageObj.onaborts.add(() => {
                         resolve([messageObj.error, messageObj.data, messageObj.isInvoke]);
                     });
 
                     //or exit if invoke finish
-                    messageObj.onFinish = () => {
+                    messageObj.onfinish = () => {
                         resolve([messageObj.error, messageObj.data, messageObj.isInvoke]);
                     };
                 });
@@ -668,12 +633,12 @@ const Communicator = class {
         //refresh interactivity
         clearTimeout(messageObj.interactTimeoutId);
         messageObj.interactTimeoutId = setTimeout(() => {
-            messageObj.error = this.ERROR_INACTIVE;
+            messageObj.error = this.ERROR.INACTIVE;
             for (const cb of messageObj.onaborts) {
                 cb();
             }
-            messageObj?.onFinish?.();
-            this.MessageFree(messageObj);
+            messageObj?.onfinish?.();
+            this.messageFree(messageObj);
         }, this.interactTimeout);
 
         //abort
@@ -688,6 +653,19 @@ const Communicator = class {
         }
         messageObj.packets.set(packetId, data);
         //console.log(packetId, data);
+
+        //trigger progress (answer for invoke, or incoming message)
+        if (messageObj.isAnswer === true) {
+            //start from 50%
+            messageObj.progress = messageObj.packets.size / messageObj.packetCount / 2;
+            messageObj.onprogress?.(0.5 + messageObj.progress);
+        } else {
+            //start from 0%
+            messageObj.progress = messageObj.packets.size / messageObj.packetCount;
+            messageObj.onprogress?.(messageObj.progress);
+        }
+        //messageObj.progress = messageObj.packets.size / messageObj.packetCount;
+        //messageObj.onprogress?.(messageObj.progress);
 
 
         //send ack
@@ -729,16 +707,43 @@ const Communicator = class {
             //console.log(messageObj.isAnswer);
 
             //callback (if new)
+            if (messageObj.isInvoke) {
+                messageObj.send = (msg, transfer, timeout=messageObj.timeout, options) => {
+                    this.messageSet(messageObj, options, false);
+                    messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
+                    return messageObj;
+                };
+                messageObj.invoke = (msg, transfer, timeout=messageObj.timeout, options) => {
+                    this.messageSet(messageObj, options, true);
+                    messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
+                    return messageObj;
+                };
+                messageObj?.onfinish?.();
+                if (messageObj.isAnswer) {
+                    messageObj.oninvoke?.(messageObj);
+                } else {
+                    this.oninvoke?.(messageObj);
+                }
+            } else {
+                messageObj?.onfinish?.();
+                if (messageObj.isAnswer) {
+                    messageObj.onsend?.(messageObj.data);
+                } else {
+                    this.onsend?.(messageObj.data);
+                }
+            }
+            /*
             if (messageObj.isAnswer === false) {
                 if (messageObj.isInvoke) {
-                    messageObj.send = (msg, transfer, timeout = messageObj.timeout, options) => {
-
-                        this.MessageSet(messageObj, options, false);
-                        messageObj.process = this.sendRaw(messageObj, msg, transfer, timeout);
+                    messageObj.send = (msg, transfer, timeout=messageObj.timeout, options) => {
+                        this.messageSet(messageObj, options, false);
+                        messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
+                        return messageObj;
                     };
-                    messageObj.invoke = (msg, transfer, timeout, options) => {
-                        this.MessageSet(messageObj, options, true);
-                        messageObj.process = this.invokeRaw(messageObj, msg, transfer, timeout);
+                    messageObj.invoke = (msg, transfer, timeout=messageObj.timeout, options) => {
+                        this.messageSet(messageObj, options, true);
+                        messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
+                        return messageObj;
                     };
                     this.oninvoke?.(messageObj);
                 } else {
@@ -747,27 +752,43 @@ const Communicator = class {
             } else {
                 //todo need answer triggering
                 if (messageObj.isInvoke) {
-                    messageObj.send = (msg, transfer, timeout = messageObj.timeout, options) => {
-                        this.MessageSet(messageObj, options, false);
-                        messageObj.process = this.sendRaw(messageObj, msg, transfer, timeout);
+                    messageObj.send = (msg, transfer, timeout=messageObj.timeout, options) => {
+                        this.messageSet(messageObj, options, false);
+                        messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
+                        return messageObj;
                     };
-                    messageObj.invoke = (msg, transfer, timeout = messageObj.timeout, options) => {
-                        this.MessageSet(messageObj, options, true);
-                        messageObj.process = this.invokeRaw(messageObj, msg, transfer, timeout);
+                    messageObj.invoke = (msg, transfer, timeout=messageObj.timeout, options) => {
+                        this.messageSet(messageObj, options, true);
+                        messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
+                        return messageObj;
                     };
                     messageObj.oninvoke?.(messageObj);
                 } else {
                     messageObj.onsend?.(messageObj.data);
                 }
-            }
+            }*/
             //callback
-            messageObj?.onFinish?.();
-            this.MessageFree(messageObj);
+            
+            this.messageFree(messageObj);
         }
     };
 
+    onSend(cb) {
+        this.onsend = cb;
+        return this;
+    };
+    onInvoke(cb) {
+        this.oninvoke = cb;
+        return this;
+    };
+    onIncoming(cb) {
+        this.onincoming = cb;
+        return this;
+    };
 
-    MessageCreate() {
+    
+
+    messageCreate() {
         //get unique message id
         do {
             this.messageId = (this.messageId + 2) % 4294967294; // 32 bit-1
@@ -781,7 +802,7 @@ const Communicator = class {
         this.messages.set(messageId, messageObj);
         return messageObj;
     };
-    MessageSet(messageObj, options, isInvoke) {
+    messageSet(messageObj, options, isInvoke) {
         //set sending params
         let packetSize;
         let packetTimeout;
@@ -821,6 +842,11 @@ const Communicator = class {
         //set invoke
         messageObj.isInvoke = isInvoke;
 
+        //reset progress
+        messageObj.packetCount = Infinity;
+        messageObj.packetDone = 0;
+        messageObj.packets = new Map();
+
         //set answer (if need)
         if (messageObj.messageId % 2 !== this.myReminder) {
             messageObj.isAnswer = true;
@@ -836,10 +862,10 @@ const Communicator = class {
             this.messages.set(messageObj.messageId, messageObj);
         }
     };
-    async MessageSend(messageObj, msg, transfer) {
+    async messageSend(messageObj, msg, transfer) {
         //initial interactivity
         const abort = () => {
-            messageObj.error = this.ERROR_INACTIVE;
+            messageObj.error = this.ERROR.INACTIVE;
             for (const cb of messageObj.onaborts) {
                 cb();
             }
@@ -855,7 +881,7 @@ const Communicator = class {
 
             //check abort
             if (isAbort) {
-                messageObj.error = this.ERROR_REJECT;
+                messageObj.error = this.ERROR.REJECT;
                 for (const cb of messageObj.onaborts) {
                     cb();
                 }
@@ -863,7 +889,7 @@ const Communicator = class {
             }
 
             //packet callback
-            const cb = messageObj.packetCallbacks.get(packetId);
+            const cb = messageObj.onpackets.get(packetId);
             cb?.();
         };
 
@@ -890,8 +916,9 @@ const Communicator = class {
                 if (messageObj.isAnswer) {
                     view.setUint32(view.byteLength - 13, messageObj.answerFor);
                 }
+                messageObj.packetCount = 1;
                 //send
-                await this.MessageSendPacket(messageObj, data.buffer, [data.buffer], 0);
+                await this.messageSendPacket(messageObj, data.buffer, [data.buffer], 0);
 
             } else {
                 //queue logic
@@ -925,6 +952,7 @@ const Communicator = class {
                 //update size and packet count (only increase)
                 wholeSize += answerCount * answerOverhead; //answer headers size 
                 packetCount = Math.ceil(wholeSize / (packetSize - generalOverhead));
+                messageObj.packetCount = packetCount;
                 answerCount = Math.min(threadCount, packetCount);
 
                 let pos = 0;
@@ -945,7 +973,7 @@ const Communicator = class {
                         view.setUint32(view.byteLength - 17, messageObj.answerFor);
                     }
                     //send
-                    next(stackId, this.MessageSendPacket(messageObj, data.buffer, [data.buffer], stackId));
+                    next(stackId, this.messageSendPacket(messageObj, data.buffer, [data.buffer], stackId));
                     stackId++;
                 }
 
@@ -965,7 +993,7 @@ const Communicator = class {
                         view.setUint32(view.byteLength - 15, messageObj.answerFor);
                     }
                     //send
-                    next(stackId, this.MessageSendPacket(messageObj, data.buffer, [data.buffer], stackId));
+                    next(stackId, this.messageSendPacket(messageObj, data.buffer, [data.buffer], stackId));
                     stackId++;
                 }
                 await race();
@@ -983,7 +1011,7 @@ const Communicator = class {
                     view.setUint32(view.byteLength - 9, messageObj.messageId);
                     view.setUint16(view.byteLength - 11, stackId);
                     //send
-                    next(stackId, this.MessageSendPacket(messageObj, data.buffer, [data.buffer], stackId));
+                    next(stackId, this.messageSendPacket(messageObj, data.buffer, [data.buffer], stackId));
                     stackId++;
                     await race();
                 }
@@ -1003,13 +1031,14 @@ const Communicator = class {
             if (messageObj.isAnswer) {
                 data.push(messageObj.answerFor);
             }
+            messageObj.packetCount = 1;
             //copy message
             data.push(msg);
             //send
-            await this.MessageSendPacket(messageObj, data, transfer, 0);
+            await this.messageSendPacket(messageObj, data, transfer, 0);
         }
     };
-    async MessageSendPacket(messageObj, msg, transfer, packetId) {
+    async messageSendPacket(messageObj, msg, transfer, packetId) {
         //params
         const retry = messageObj.packetRetry;
         const patience = messageObj.packetTimeout;
@@ -1017,15 +1046,23 @@ const Communicator = class {
         let trying = 0;
         await new Promise((resolve) => {
             //free from memory
-            const free = function() {
+            const free = async function() {
+                //trigger progress
+                messageObj.packetDone++;
+                const divide = (messageObj.isInvoke ? 2 : 1);
+                const progress = messageObj.packetDone / messageObj.packetCount / divide;
+                messageObj.progress = progress;
+                messageObj.onprogress?.(progress);
+
+                //free references
                 clearTimeout(interval);
                 messageObj.onaborts.delete(abort);
-                messageObj.packetCallbacks.delete(packetId);
+                messageObj.onpackets.delete(packetId);
                 resolve(undefined);
             };
 
             //success ack
-            messageObj.packetCallbacks.set(packetId, () => {
+            messageObj.onpackets.set(packetId, () => {
                 free();
             });
 
@@ -1039,7 +1076,7 @@ const Communicator = class {
             const sending = () => {
                 //abort if too much tries
                 if (retry < trying) {
-                    messageObj.error = this.ERROR_TRANSFER_RECEIVE;
+                    messageObj.error = this.ERROR.TRANSFER_RECEIVE;
                     for (const cb of messageObj.onaborts) {
                         cb();
                     }
@@ -1062,7 +1099,7 @@ const Communicator = class {
             sending();
         });
     };
-    async MessageFree(messageObj) {
+    async messageFree(messageObj) {
         //stop timers
         clearTimeout(messageObj.timeoutId);
         clearTimeout(messageObj.interactTimeoutId);
@@ -1075,12 +1112,73 @@ const Communicator = class {
         //free from global stack
         this.messages.delete(messageObj.messageId);
     };
-
-
 };
 
-/**
- * Communication class for communication
- * @module Communicator
- */
+
+//message instancce class, created by Communicator class
+const Message = class {
+    packetSize=1000;        // The maximum packet size in messaging in bytes.
+    packetTimeout=2000;     // The maximum waiting time for packet in miliseconds.
+    packetRetry=Infinity;   // The maximum retry attempts for packets.
+    sendThreads=16;         // The maximum parallel packet trying number.
+
+    onreceive = function() {};          // The callback function for receiving any packets.
+    onpackets = new Map();              // Multiple callback functions for pending packets.
+    onaborts = new Set();               // Multiple callback functions to broadcast abort event.
+    onfinish = function() {};           // The callback function for finish state.
+    onprogress = function(progress) {}; // The callback function for progress update.
+    onincoming = function(message) {};  // The callback function for incoming message.
+    onsend = function(data) {};         // The callback function for successfull incoming sending message.
+    oninvoke = function(message) {};    // The callback function for successfull incoming invoke message.
+
+    messageId;              // The unique id of the message.
+    timeoutId = -1;         // The setTimeout number id for timeout mesure.
+    interactTimeoutId = -1; // The setTimeout number id for interactivity (timeout between packets) mesure.
+
+    isAnswer = false;       //Boolean to indicate that this message an remote answer or new locally created message.
+    answerFor = 0;          //If the message is an answer, this will be the message id of the parent message.
+
+    packetCount = Infinity; // The total packet count of the message.
+    packetDone = 0;         // The total packet count of the message.
+    packets = new Map();    // Incoming packet data in a map.
+    pending;                // The sending or invoke promise.
+
+    //public API
+    progress = 0;   // The progress of the message in 0-1 range.
+    error = "";     // The error message if any.
+    data;           // The incoming data.
+    isInvoke = false;   // True if message is invoke else the message is only send.
+
+    send = undefined;
+    invoke = undefined;
+    onProgress(cb) {
+        this.onprogress = cb;
+        return this;
+    };
+    onIncoming(cb) {
+        this.onincoming = cb;
+        return this;
+    };
+    onSend(cb) {
+        this.onsend = cb;
+        return this;
+    };
+    onInvoke(cb) {
+        this.oninvoke = cb;
+        return this;
+    };
+    abort() {
+        this.error = errors.ABORT;
+        for (const cb of this.onaborts) {
+            cb();
+        }
+        return this;
+    };
+    async wait() {
+        await this.pending;
+        return this;
+    };
+};
+
+
 export { Communicator };

@@ -158,11 +158,13 @@ const HTTPServerStart = async function(conf) {
     const server = https.createServer({
         "key": conf["key"],
         "cert": conf["cert"]
-    }, requestHandle)
+    }, requestHandle);
+    console.log ("    Open server at https://localhost:" + conf["port"]);
     server.listen(conf["port"]);
     servers.push(server);
     if (typeof conf["redirectFrom"] !== "undefined") {
         const server = http.createServer(redirectHandle);
+        console.log ("    Open redirect at http://localhost:" + conf["redirectFrom"]);
         server.listen(conf["redirectFrom"]);
         servers.push(server);
     }
@@ -201,7 +203,7 @@ const close = async function(HTTPservers) {
 // Main start
 const main = async function(args) {
     // Start HTTP server
-    process.stdout.write("Start HTTP servers...    ");
+    process.stdout.write("Start HTTP servers...    \n");
     const HTTPservers = await HTTPServerStart(conf);
     process.stdout.write("done\n");
 
