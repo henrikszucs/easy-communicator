@@ -590,10 +590,17 @@ const Communicator = class {
                     return;
                 }
 
+                // finsh outgoing sendings
+                const iterator1 = messageObj.onpackets[Symbol.iterator]();
+                for (const [key, val] of iterator1) {
+                    val();
+                }
+
                 // move message object
                 messageObj.messageId = messageId;
                 messageObj.isInvoke = (isInvoke === 1 ? true : false);
                 messageObj.isAnswer = true;
+                messageObj.packetCount = 0;
                 messageObj.packets = new Map();
                 this.messages.delete(answerFor);
                 this.messages.set(messageId, messageObj);
@@ -652,15 +659,13 @@ const Communicator = class {
         //trigger progress (answer for invoke, or incoming message)
         if (messageObj.isAnswer === true) {
             //start from 50%
-            messageObj.progress = messageObj.packets.size / messageObj.packetCount / 2;
-            messageObj.onprogress?.(0.5 + messageObj.progress);
+            messageObj.progress = 0.5 + messageObj.packets.size / messageObj.packetCount / 2;
+            messageObj.onprogress?.(messageObj.progress);
         } else {
             //start from 0%
             messageObj.progress = messageObj.packets.size / messageObj.packetCount;
             messageObj.onprogress?.(messageObj.progress);
         }
-        //messageObj.progress = messageObj.packets.size / messageObj.packetCount;
-        //messageObj.onprogress?.(messageObj.progress);
 
 
         //send ack
@@ -681,18 +686,20 @@ const Communicator = class {
             if (firstPacket instanceof ArrayBuffer) {
                 //calc max message size
                 let size = 0;
+                let packets = []; // (Map not ordered, need Array)
+                packets.length = messageObj.packets.size;
                 const it = messageObj.packets[Symbol.iterator]();
                 for (const [key, value] of it) {
                     size += value.byteLength;
+                    packets[key] = value;
                 }
                 const data = new Uint8Array(size);
 
-                //copy packets data
-                const it2 = messageObj.packets[Symbol.iterator]();
+                //copy packets data 
                 let offset = 0;
-                for (const [key, value] of it2) {
-                    data.set(new Uint8Array(value), offset);
-                    offset += value.byteLength;
+                for (const packet of packets) {
+                    data.set(new Uint8Array(packet), offset);
+                    offset += packet.byteLength;
                 }
                 messageObj.data = data.buffer;
             } else {
@@ -727,43 +734,7 @@ const Communicator = class {
                     this.onsend?.(messageObj.data);
                 }
             }
-            /*
-            if (messageObj.isAnswer === false) {
-                if (messageObj.isInvoke) {
-                    messageObj.send = (msg, transfer, timeout=messageObj.timeout, options) => {
-                        this.messageSet(messageObj, options, false);
-                        messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
-                        return messageObj;
-                    };
-                    messageObj.invoke = (msg, transfer, timeout=messageObj.timeout, options) => {
-                        this.messageSet(messageObj, options, true);
-                        messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
-                        return messageObj;
-                    };
-                    this.oninvoke?.(messageObj);
-                } else {
-                    this.onsend?.(messageObj.data);
-                }
-            } else {
-                //todo need answer triggering
-                if (messageObj.isInvoke) {
-                    messageObj.send = (msg, transfer, timeout=messageObj.timeout, options) => {
-                        this.messageSet(messageObj, options, false);
-                        messageObj.pending = this.sendRaw(messageObj, msg, transfer, timeout);
-                        return messageObj;
-                    };
-                    messageObj.invoke = (msg, transfer, timeout=messageObj.timeout, options) => {
-                        this.messageSet(messageObj, options, true);
-                        messageObj.pending = this.invokeRaw(messageObj, msg, transfer, timeout);
-                        return messageObj;
-                    };
-                    messageObj.oninvoke?.(messageObj);
-                } else {
-                    messageObj.onsend?.(messageObj.data);
-                }
-            }*/
             //callback
-            
             this.messageFree(messageObj);
         }
     };
@@ -1045,9 +1016,8 @@ const Communicator = class {
                 //trigger progress
                 messageObj.packetDone++;
                 const divide = (messageObj.isInvoke ? 2 : 1);
-                const progress = messageObj.packetDone / messageObj.packetCount / divide;
-                messageObj.progress = progress;
-                messageObj.onprogress?.(progress);
+                messageObj.progress = messageObj.packetDone / messageObj.packetCount / divide;
+                messageObj.onprogress?.(messageObj.progress);
 
                 //free references
                 clearTimeout(interval);

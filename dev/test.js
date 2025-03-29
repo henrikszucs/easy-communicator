@@ -80,11 +80,6 @@ import {Communicator} from "/src/communicator.js";
     const com1 = new Communicator({
         "sender": async function(data, transfer) {
             //console.log(data)
-            await new Promise(function(resolve) {
-                setTimeout(() => {
-                    resolve();
-                }, 1);
-            });
             com2.receive(data);
         },
         "interactTimeout": 3000,
@@ -98,12 +93,8 @@ import {Communicator} from "/src/communicator.js";
 
     const com2 = new Communicator({
         "sender": async function(data, transfer) {
+            ;
             //console.log(data)
-            await new Promise(function(resolve) {
-                setTimeout(() => {
-                    resolve();
-                }, 1);
-            });
             com1.receive(data);
         },
         "interactTimeout": 3000,
@@ -456,6 +447,30 @@ import {Communicator} from "/src/communicator.js";
 
 
 
+    //add latency for testing progress
+    com1.configure({
+        "sender": async function(data, transfer) {
+            //console.log(data)
+            await new Promise(function(resolve) {
+                setTimeout(() => {
+                    resolve();
+                }, 1);
+            });
+            com2.receive(data);
+        }
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            //console.log(data)
+            await new Promise(function(resolve) {
+                setTimeout(() => {
+                    resolve();
+                }, 1);
+            });
+            com1.receive(data);
+        }
+    });
+
     //test send progress states
     const progressSendProcedure = async function (data) {
         return new Promise(async (resolve, reject) => {
@@ -466,12 +481,13 @@ import {Communicator} from "/src/communicator.js";
             const realData = data;
             const realDataCopy = Copy(realData);
             let progressTest = 1 / numOfProgress;
+            let progressTestRecv = 1 / numOfProgress;
 
             //count attempts
             let goodAttempts = 0;
             const good = function () {
                 goodAttempts++;
-                if (goodAttempts === 3 + numOfProgress) {
+                if (goodAttempts === 3 + numOfProgress * 2) {
                     resolve("ok");
                 }
             };
@@ -485,6 +501,15 @@ import {Communicator} from "/src/communicator.js";
 
             });
             com1.onIncoming(async function(message) {
+                message.onProgress(function(progress) {
+                    if (progress !== progressTestRecv) {
+                        reject(new Error("Unexpected"));
+                        return;
+                    }
+                    
+                    progressTestRecv += 1 / (numOfProgress);
+                    good();
+                });
                 await message.wait();
                 good();
                 
@@ -505,9 +530,9 @@ import {Communicator} from "/src/communicator.js";
 
             let message = com2.send(realData, [realData]);
             message.onProgress(function(progress) {
-                console.log(progress);
-                console.log(progressTest);
                 if (progress !== progressTest) {
+                    console.log(progress);
+                    console.log(progressTest);
                     reject(new Error("Unexpected"));
                     return;
                 }
@@ -516,7 +541,10 @@ import {Communicator} from "/src/communicator.js";
                 good();
             });
             await message.wait();
-            console.log(message.progress);
+            if (message.progress !== 1) {
+                reject(new Error("Unexpected"));
+                return;
+            }
             if (message.error !== "") {
                 reject(new Error("Unexpected"));
                 return;
@@ -540,34 +568,230 @@ import {Communicator} from "/src/communicator.js";
     console.log("Test 16...");
     await progressSendProcedure(RandomArrayBuffer(3100));
     console.log("Test 16... OK");
-    return;
+   
 
 
-
+    
     //test invoke progress states
     const progressInvokeProcedure = async function (data) {
         return new Promise(async (resolve, reject) => {
+            let numOfProgress = 1 * 2;
+            if (data instanceof ArrayBuffer) {
+                numOfProgress = Math.ceil(data.byteLength / packetSize) * 2;
+            }
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+            let progressTest = 1 / numOfProgress;
 
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 4 + numOfProgress) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+
+            });
+            com1.onIncoming(async function(message) {
+                await message.wait();
+                if (Equal(message.data, realDataCopy) === false) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+
+                await message.send(realModify).wait();
+                good();
+                
+            });
+            com1.onInvoke(async function(message) {
+                good();
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            message.onProgress(function(progress) {
+
+                if (progress !== progressTest) {
+                    console.log(progress);
+                    console.log(progressTest);
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                
+                progressTest += 1 / numOfProgress;
+                good();
+            });
+            await message.wait();
+            if (message.progress !== 1) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            if (message.error !== "") {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            if (Equal(message.data, realModifyCopy) === false) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
         });
     };
 
 
     // test send progress, ArrayBuffer
     console.log("Test 17...");
-    await progressSendProcedure(RandomArrayBuffer(100));
+    await progressInvokeProcedure(RandomArrayBuffer(100));
     console.log("Test 17... OK");
     
     // test send progress, Object
     console.log("Test 18...");
-    await progressSendProcedure({"test": RandomArray(100)});
+    await progressInvokeProcedure({"test": RandomArray(100)});
     console.log("Test 18... OK");
 
     // test send progress, ArrayBuffer, large
     console.log("Test 19...");
-    await progressSendProcedure(RandomArrayBuffer(3100));
+    await progressInvokeProcedure(RandomArrayBuffer(3100));
     console.log("Test 19... OK");
 
 
+
+
+    
+
+    //modifiy channel 10% drop rate
+    let dropped = [];
+    com1.configure({
+        "packetSize": 100,
+        "sender": async function(data, transfer) {
+            console.log(new Uint8Array(data));
+            if (Math.random() < 0.5) {
+                dropped.push({"com1": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com1": 0, "l": data.byteLength});
+            com2.receive(new Uint8Array(new Uint8Array(data)).buffer);
+        },
+        "timeout": 5000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    com2.configure({
+        
+        "sender": async function(data, transfer) {
+            //console.log(new Uint8Array(data));
+            if (Math.random() < 0.5) {
+                dropped.push({"com2": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com2": 0, "l": data.byteLength});
+            com1.receive(new Uint8Array(new Uint8Array(data)).buffer);
+        },
+        "interactTimeout": 3000,
+
+        "timeout": 5000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+
+    
+
+    // test invoke procedure
+    const invokeDropoutProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                await message.wait();
+                if (Equal(message.data, realDataCopy) === false) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                message.send(realModify);
+                await message.wait();
+                good();
+            });
+            com1.onInvoke(function(message) {
+                if (Equal(message.data, realDataCopy) === false) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            await message.wait();
+            
+            if (Equal(message.data, realModifyCopy) === false) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+
+    
+
+    console.log("Test 20...");
+    try {
+        await invokeDropoutProcedure(RandomArrayBuffer(450));
+    }
+    catch (e) {
+        console.error(e);
+    }
+    
+    console.log(dropped);
+    console.log("Test 20... OK");
+
+    return;
+
+    return;
 
 
     //test timeout error
