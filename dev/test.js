@@ -79,6 +79,9 @@ import {Communicator} from "/src/communicator.js";
     console.log("Test 1...");
     const com1 = new Communicator({
         "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+            }
             //console.log(data)
             com2.receive(data);
         },
@@ -93,7 +96,9 @@ import {Communicator} from "/src/communicator.js";
 
     const com2 = new Communicator({
         "sender": async function(data, transfer) {
-            ;
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+            }
             //console.log(data)
             com1.receive(data);
         },
@@ -450,7 +455,9 @@ import {Communicator} from "/src/communicator.js";
     //add latency for testing progress
     com1.configure({
         "sender": async function(data, transfer) {
-            //console.log(data)
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+            }
             await new Promise(function(resolve) {
                 setTimeout(() => {
                     resolve();
@@ -461,7 +468,9 @@ import {Communicator} from "/src/communicator.js";
     });
     com2.configure({
         "sender": async function(data, transfer) {
-            //console.log(data)
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+            }
             await new Promise(function(resolve) {
                 setTimeout(() => {
                     resolve();
@@ -678,15 +687,18 @@ import {Communicator} from "/src/communicator.js";
     //modifiy channel 10% drop rate
     let dropped = [];
     com1.configure({
-        "packetSize": 100,
         "sender": async function(data, transfer) {
-            console.log(new Uint8Array(data));
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            
             if (Math.random() < 0.5) {
                 dropped.push({"com1": 1, "l": data.byteLength});
                 return;
             }
             dropped.push({"com1": 0, "l": data.byteLength});
-            com2.receive(new Uint8Array(new Uint8Array(data)).buffer);
+            com2.receive(data);
         },
         "timeout": 5000,
         "packetSize": 100,
@@ -695,18 +707,18 @@ import {Communicator} from "/src/communicator.js";
         "sendThreads": 16
     });
     com2.configure({
-        
         "sender": async function(data, transfer) {
-            //console.log(new Uint8Array(data));
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
             if (Math.random() < 0.5) {
                 dropped.push({"com2": 1, "l": data.byteLength});
                 return;
             }
             dropped.push({"com2": 0, "l": data.byteLength});
-            com1.receive(new Uint8Array(new Uint8Array(data)).buffer);
+            com1.receive(data);
         },
-        "interactTimeout": 3000,
-
         "timeout": 5000,
         "packetSize": 100,
         "packetTimeout": 100,
@@ -777,19 +789,26 @@ import {Communicator} from "/src/communicator.js";
     };
 
     
-
-    console.log("Test 20...");
     try {
+        console.log("Test 20...");
+        await invokeDropoutProcedure(RandomArrayBuffer(50));
+        console.log("Test 20... OK");
+        
+        // test send progress, Object
+        console.log("Test 21...");
+        await invokeDropoutProcedure({"test": RandomArray(100)});
+        console.log("Test 21... OK");
+
+        console.log("Test 22...");
         await invokeDropoutProcedure(RandomArrayBuffer(450));
+        console.log("Test 22... OK");
     }
     catch (e) {
+        console.log(dropped);
         console.error(e);
     }
-    
-    console.log(dropped);
-    console.log("Test 20... OK");
 
-    return;
+    
 
     return;
 

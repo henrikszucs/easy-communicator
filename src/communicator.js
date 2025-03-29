@@ -874,7 +874,7 @@ const Communicator = class {
             if (msg.byteLength + generalOverhead + answerOverhead <= packetSize) {
                 const data = new Uint8Array(msg.byteLength + generalOverhead + answerOverhead);
                 //copy message
-                data.set(new Uint8Array(msg.transfer()), 0);
+                data.set(new Uint8Array(msg), 0);
                 //set headers
                 const view = new DataView(data.buffer);
                 view.setUint8(view.byteLength - 1, invokeFlag + answerFlag);
