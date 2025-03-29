@@ -678,13 +678,10 @@ import {Communicator} from "/src/communicator.js";
     console.log("Test 19...");
     await progressInvokeProcedure(RandomArrayBuffer(3100));
     console.log("Test 19... OK");
-
-
-
-
+    
     
 
-    //modifiy channel 10% drop rate
+    //modifiy channel 50% drop rate
     let dropped = [];
     com1.configure({
         "sender": async function(data, transfer) {
@@ -725,8 +722,6 @@ import {Communicator} from "/src/communicator.js";
         "packetRetry": Infinity,
         "sendThreads": 16
     });
-
-    
 
     // test invoke procedure
     const invokeDropoutProcedure = async function (data) {
@@ -808,9 +803,6 @@ import {Communicator} from "/src/communicator.js";
         console.error(e);
     }
 
-    
-
-    return;
 
 
     //test timeout error

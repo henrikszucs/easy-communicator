@@ -1,10 +1,11 @@
 {
     "name": "easy-communicator",
-    "version": "0.0.1",
+    "version": "0.9.1",
     "description": "An API documentation generator for JavaScript.",
     "keywords": [
         "javascript",
-        "communication"
+        "communication",
+	"icp"
     ],
     "license": "GPL-2.0 license",
     "repository": {
@@ -18,9 +19,6 @@
             "email": "henrikszucs6@gmail.com"
         }
     ],
-    "dependencies": {
-        "clean-jsdoc-theme": "=4.3.0"
-    },
     "scripts": {
         "dev-server": "node dev/dev-server.js"
     },
