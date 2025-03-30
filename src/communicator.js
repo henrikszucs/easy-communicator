@@ -2,6 +2,7 @@
 
 //constant values 
 const errors = {
+    NO_ERROR: "",               // no error
     TIMEOUT: "timeout",         // error occurs if the data transfer is not completed in time
     INACTIVE: "inactive",       // error occurs if between the packet transfers there is no interaction
     ABORT: "abort",             // error occurs if local side abort the process
@@ -13,7 +14,7 @@ const errors = {
 //main class
 const Communicator = class {
     UID = 1;                    //random positive number to decide the side
-    sender = async function(data, transfer) {}; //sender function
+    sender = async function(data, transfer, message) {}; //sender function
     interactTimeout = 5000;     //cancel if not happen any transmission in time
 
     timeout = 5000;             //the whole invoke process time limit
@@ -124,7 +125,7 @@ const Communicator = class {
     release() {
         //free up every pointer that point to non internal variables
         clearInterval(this.timeSyncIntervalId);
-        this.sender = async function(data, transfer) {};
+        this.sender = async function(data, transfer, message) {};
         this.messages = new Map();
     };
 
@@ -165,7 +166,9 @@ const Communicator = class {
                 view.setUint8(view.byteLength - 1, 1); //time sync flag
                 view.setFloat64(view.byteLength - 9, Date.now()); //my time
                 view.setFloat64(view.byteLength - 17, -1); //other time
-                this.sender(buffer, [buffer]);
+                this.sender(buffer, [buffer], undefined);
+                
+                
             });
         } while (trying < retry && isSuccess === false);
 
@@ -192,7 +195,7 @@ const Communicator = class {
         };
     };
 
-    async sideSync(retry = 5, patience=this.interactTimeout) {
+    async sideSync(retry=5, patience=this.interactTimeout) {
         //check runnig request
         if (this.sidePromise !== undefined) {
             return this.sidePromise;
@@ -219,7 +222,7 @@ const Communicator = class {
                 view.setUint32(view.byteLength - 5, Date.now() % 4294967295); //my time
                 view.setUint32(view.byteLength - 9, this.UID); //my UID
                 view.setUint32(view.byteLength - 13, 0); //other UID
-                this.sender(buffer, [buffer]);
+                this.sender(buffer, [buffer], undefined);
             });
         } while (trying < retry && isSuccess === false);
 
@@ -289,6 +292,21 @@ const Communicator = class {
 
         //send data
         await this.messageSend(messageObj, msg, transfer);
+        if (messageObj.error === this.ERROR.ABORT) {
+            console.log(messageObj.error)
+            const sendTime = (Date.now() + this.timeOffset) % 4294967295; //32 bit time
+            const data = new Uint8Array(9);
+            const view = new DataView(data.buffer);
+            //set headers
+            view.setUint8(view.byteLength - 1, 16); //abort flag
+            view.setUint32(view.byteLength - 5, sendTime); //send time
+            view.setUint32(view.byteLength - 9, messageObj.messageId);
+            try {
+                this.sender(data.buffer, [data.buffer], messageObj);
+            } catch (e) {
+                
+            }
+        }
         this.messageFree(messageObj);
 
         return messageObj;
@@ -324,8 +342,23 @@ const Communicator = class {
 
             //exit if error
             messageObj.onaborts.add(() => {
-                console.log("aborted");
-                console.log(messageObj.error);
+                //console.log("aborted");
+                //console.log(messageObj.error);
+                //send abort warning to other side
+                if (messageObj.error === this.ERROR.ABORT) {
+                    const sendTime = (Date.now() + this.timeOffset) % 4294967295; //32 bit time
+                    const data = new Uint8Array(9);
+                    const view = new DataView(data.buffer);
+                    //set headers
+                    view.setUint8(view.byteLength - 1, 16); //abort flag
+                    view.setUint32(view.byteLength - 5, sendTime); //send time
+                    view.setUint32(view.byteLength - 9, messageObj.messageId);
+                    try {
+                        this.sender(data.buffer, [data.buffer], messageObj);
+                    } catch (e) {
+
+                    }
+                }
                 this.messageFree(messageObj);
                 resolve([messageObj.error, messageObj.data, messageObj.isInvoke]);
             });
@@ -506,7 +539,7 @@ const Communicator = class {
                 view.setUint8(view.byteLength - 1, 1);
                 view.setFloat64(view.byteLength - 9, time1);
                 view.setFloat64(view.byteLength - 17, Date.now());
-                this.sender(buffer, [buffer]);
+                this.sender(buffer, [buffer], undefined);
                 return;
             }
 
@@ -532,7 +565,7 @@ const Communicator = class {
                 view.setUint32(view.byteLength - 5, time);
                 view.setUint32(view.byteLength - 9, UID1);
                 view.setUint32(view.byteLength - 13, this.UID);
-                this.sender(buffer, [buffer]);
+                this.sender(buffer, [buffer], undefined);
                 return;
             }
 
@@ -600,7 +633,7 @@ const Communicator = class {
                 messageObj.messageId = messageId;
                 messageObj.isInvoke = (isInvoke === 1 ? true : false);
                 messageObj.isAnswer = true;
-                messageObj.packetCount = 0;
+                messageObj.packetCount = Infinity;
                 messageObj.packets = new Map();
                 this.messages.delete(answerFor);
                 this.messages.set(messageId, messageObj);
@@ -632,6 +665,21 @@ const Communicator = class {
             }
         }
 
+        //no answer if under error
+        if (messageObj.error !== "") {
+            return;
+        }
+
+        //abort
+        if (isAbort) {
+            messageObj.error = this.ERROR.REJECT;
+            for (const cb of messageObj.onaborts) {
+                cb();
+            }
+            return;
+        }
+        
+
         //refresh interactivity
         clearTimeout(messageObj.interactTimeoutId);
         messageObj.interactTimeoutId = setTimeout(() => {
@@ -643,10 +691,6 @@ const Communicator = class {
             this.messageFree(messageObj);
         }, this.interactTimeout);
 
-        //abort
-        if (isAbort) {
-            return;
-        }
 
         //set data
         if (packetId === 0) {
@@ -678,7 +722,16 @@ const Communicator = class {
             view.setUint8(view.byteLength - 1, (isSplit ? 8 : 0));
             view.setUint16(view.byteLength - 11, packetId);
         }
-        this.sender(ack, [ack]);
+        try {
+            this.sender(ack, [ack], messageObj);
+        } catch (e) {
+            console.warn("Sender error", e);
+            messageObj.error = this.ERROR.TRANSFER_SEND;
+            for (const cb of messageObj.onaborts) {
+                cb();
+            }
+            return;
+        }
 
         //check finish
         if (messageObj.packetCount === messageObj.packets.size) {
@@ -841,6 +894,11 @@ const Communicator = class {
 
         //message listener
         messageObj.onreceive = (isAbort, packetId) => {
+            //no communication if error
+            if (messageObj.error !== "") {
+                return;
+            }
+
             //update interactivity
             clearTimeout(messageObj.interactTimeoutId);
             messageObj.interactTimeoutId = setTimeout(abort, this.interactTimeout);
@@ -1038,7 +1096,7 @@ const Communicator = class {
             messageObj.onaborts.add(abort);
 
             //send
-            const sending = () => {
+            const sending = async () => {
                 //abort if too much tries
                 if (retry < trying) {
                     messageObj.error = this.ERROR.TRANSFER_RECEIVE;
@@ -1054,10 +1112,17 @@ const Communicator = class {
                 if (msg instanceof ArrayBuffer) {
                     const view = new DataView(msg);
                     view.setUint32(view.byteLength - 5, sendTime);
-                    this.sender(msg, transfer);
                 } else {
                     msg[1] = sendTime;
-                    this.sender(msg, transfer);
+                }
+                try {
+                    await this.sender(msg, transfer, messageObj);
+                } catch (e) {
+                    messageObj.error = this.ERROR.TRANSFER_SEND;
+                    for (const cb of messageObj.onaborts) {
+                        cb();
+                    }
+                    return;
                 }
             };
             const interval = setInterval(sending, patience);

@@ -14,10 +14,12 @@ Copy and import the following file:
 ```js
 //setup comminicator
 const com = new Communicator({
-    "sender": async function(data, transfer) {
+    "sender": async function(data, transfer, message) {
         //the function that will convert and send the to the other side e.g. postMessage, WebRTC, XMLHttpRequest etc.
         window.postMessage(data, transfer);
-        //if sender function throws error it will triggers com.ERROR.TRANSFER_SEND error in message object
+        // should not throw error
+        // message - message object to e.g. abort if sender function run to critical error
+        // if sender function throws error it will triggers com.ERROR.TRANSFER_SEND error in message object
     },
     "interactTimeout": 3000,    //the max timeout between two packet arrive
 

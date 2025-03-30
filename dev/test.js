@@ -726,6 +726,7 @@ import {Communicator} from "/src/communicator.js";
     // test invoke procedure
     const invokeDropoutProcedure = async function (data) {
         return new Promise(async (resolve, reject) => {
+            dropped = [];
             //store reference values
             const realData = data;
             const realDataCopy = Copy(realData);
@@ -782,7 +783,6 @@ import {Communicator} from "/src/communicator.js";
             good();
         });
     };
-
     
     try {
         console.log("Test 20...");
@@ -802,149 +802,617 @@ import {Communicator} from "/src/communicator.js";
         console.log(dropped);
         console.error(e);
     }
+    console.log(dropped);
 
+    //wait console log
+    await new Promise(function(resolve) {
+        setTimeout(() => {
+            resolve();
+        }, 100);
+    });
 
-
+    let isNeedStop = false;
     //test timeout error
+    isNeedStop = false;
+    com1.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com1": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com1": 0, "l": data.byteLength});
+            com2.receive(data);
+        },
+        "interactTimeout": 1000,
+        "timeout": 500,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com2": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com2": 0, "l": data.byteLength});
+            com1.receive(data);
+            isNeedStop = true;
+        },
+        "interactTimeout": 1000,
+        "timeout": 500,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    const timeoutProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            dropped = [];
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                good();
+                await message.wait();
+                if (message.error !== com1.ERROR.INACTIVE) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+            com1.onInvoke(function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            await message.wait();
+            if (message.error !== com2.ERROR.TIMEOUT) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+    console.log("Test 23...");
+    await timeoutProcedure(RandomArrayBuffer(150));
+    console.log("Test 23... OK");
+
+
+
+    //test inactive error
+    isNeedStop = false;
+    com1.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com1": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com1": 0, "l": data.byteLength});
+            com2.receive(data);
+        },
+        "interactTimeout": 500,
+
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com2": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com2": 0, "l": data.byteLength});
+            com1.receive(data);
+            isNeedStop = true;
+        },
+        "interactTimeout": 500,
+
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    const inactiveProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            dropped = [];
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                good();
+                await message.wait();
+                if (message.error !== com1.ERROR.INACTIVE) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+            com1.onInvoke(function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            await message.wait();
+            if (message.error !== com2.ERROR.INACTIVE) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+    console.log("Test 24...");
+    await inactiveProcedure(RandomArrayBuffer(150));
+    console.log("Test 24... OK");
+    
+
+    //test abort/reject error
+    isNeedStop = false;
+    com1.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com1": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com1": 0, "l": data.byteLength});
+            await new Promise((resolve) => {
+                setTimeout(resolve, 1);
+            });
+            com2.receive(data);
+        },
+        "interactTimeout": 500,
+
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com2": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com2": 0, "l": data.byteLength});
+            await new Promise((resolve) => {
+                setTimeout(resolve, 1);
+            });
+            com1.receive(data);
+        },
+        "interactTimeout": 500,
+        
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": Infinity,
+        "sendThreads": 16
+    });
+    const abortProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            dropped = [];
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                good();
+                await message.wait();
+                console.log(message.error);
+                if (message.error !== com1.ERROR.REJECT) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+            com1.onInvoke(function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            message.abort();
+            await message.wait();
+            console.log(message.error);
+            if (message.error !== com2.ERROR.ABORT) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+    console.log("Test 25...");
+    await abortProcedure(RandomArrayBuffer(10050));
+    console.log("Test 25... OK");
+
+
+    const abortSendProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            dropped = [];
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                good();
+                await message.wait();
+                console.log(message.error);
+                if (message.error !== com1.ERROR.REJECT) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+            com1.onInvoke(function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.send(realData, [realData]);
+            message.abort();
+            await message.wait();
+            if (message.error !== com2.ERROR.ABORT) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+
+    console.log("Test 26...");
+    await abortSendProcedure(RandomArrayBuffer(10050));
+    console.log("Test 26... OK");
+
+
+    //test recieve error
+    isNeedStop = false;
+    com1.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com1": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com1": 0, "l": data.byteLength});
+            await new Promise((resolve) => {
+                setTimeout(resolve, 1);
+            });
+            com2.receive(data);
+        },
+        "interactTimeout": 500,
+
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": 2,
+        "sendThreads": 16
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                dropped.push({"com2": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com2": 0, "l": data.byteLength});
+            await new Promise((resolve) => {
+                setTimeout(resolve, 1);
+            });
+            com1.receive(data);
+            isNeedStop = true;
+        },
+        "interactTimeout": 500,
+        
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": 2,
+        "sendThreads": 16
+    });
+    const recieveProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            dropped = [];
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                good();
+                await message.wait();
+                console.log(message.error);
+                if (message.error !== com1.ERROR.INACTIVE) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+            com1.onInvoke(function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            await message.wait();
+            console.log(message.error);
+            if (message.error !== com2.ERROR.TRANSFER_RECEIVE) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+    console.log("Test 27...");
+    await recieveProcedure(RandomArrayBuffer(10050));
+    console.log("Test 27... OK");
+
+    
+
+    //test send error
+    isNeedStop = false;
+    com1.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            dropped.push({"com1": 0, "l": data.byteLength});
+            await new Promise((resolve) => {
+                setTimeout(resolve, 1);
+            });
+            com2.receive(data);
+        },
+        "interactTimeout": 500,
+
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": 2,
+        "sendThreads": 16
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+                console.log(data);
+            }
+            if (isNeedStop) {
+                throw new Error("Stopped");
+                dropped.push({"com2": 1, "l": data.byteLength});
+                return;
+            }
+            dropped.push({"com2": 0, "l": data.byteLength});
+            await new Promise((resolve) => {
+                setTimeout(resolve, 1);
+            });
+            com1.receive(data);
+            isNeedStop = true;
+        },
+        "interactTimeout": 500,
+        
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": 2,
+        "sendThreads": 16
+    });
+    const sendErrorProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            dropped = [];
+            //store reference values
+            const realData = data;
+            const realDataCopy = Copy(realData);
+            const realModify = Modify(realData);
+            const realModifyCopy = Modify(realData);
+
+            //count attempts
+            let goodAttempts = 0;
+            const good = function () {
+                goodAttempts++;
+                if (goodAttempts === 3) {
+                    resolve("ok");
+                }
+            };
+
+            com1.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com1.onIncoming(async function(message) {
+                good();
+                await message.wait();
+                console.log(message.error);
+                if (message.error !== com1.ERROR.INACTIVE) {
+                    reject(new Error("Unexpected"));
+                    return;
+                }
+                good();
+            });
+            com1.onInvoke(function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            com2.onSend(function(data) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onIncoming(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+            com2.onInvoke(async function(message) {
+                reject(new Error("Unexpected"));
+            });
+
+            let message = com2.invoke(realData, [realData]);
+            await message.wait();
+            console.log(message.error);
+            if (message.error !== com2.ERROR.TRANSFER_SEND) {
+                reject(new Error("Unexpected"));
+                return;
+            }
+            good();
+        });
+    };
+    console.log("Test 28...");
+    await sendErrorProcedure(RandomArrayBuffer(10050));
+    console.log("Test 28... OK");
+
+
+    
+
+
 
 
     return;
-    //test invoke-invoke-send, ArrayBuffer, without split, onincoming callback
-    console.log("Test 15...");
-    await new Promise(async (resolve, reject) => {
-        const realData = RandomArrayBuffer(25);
-        const realData2 = RandomArrayBuffer(25);
-        const realData3 = RandomArrayBuffer(25);
-        const realData4 = RandomArrayBuffer(25);
-        const realDataCopy = realData.slice(0);
-        const realDataCopy2 = realData2.slice(0);
-        const realDataCopy3 = realData3.slice(0);
-        const realDataCopy4 = realData4.slice(0);
-        console.log(new Uint8Array(realDataCopy));
-        console.log(new Uint8Array(realDataCopy2));
-        console.log(new Uint8Array(realDataCopy3));
-        console.log(new Uint8Array(realDataCopy4));
-        com1.onsend = function(data) {
-            reject(new Error("Unexpected"));
-        };
-        com1.onincoming = async function(message) {
-            await message.wait();
-            if (Equal(message.data, realDataCopy)) {
-                message.invoke(realData2);
-            } else {
-                reject(new Error("Unexpected"));
-            }
-            message.onincoming = async function(message) {
-                await message.wait();
-                
-                if (Equal(message.data, realDataCopy3)) {
-                    message.send(realData4);
-                } else {
-                    reject(new Error("Unexpected"));
-                }
-            };
-        };
-        com1.oninvoke = function(message) {
-            //ignore
-        };
-
-        com2.onsend = function(data) {
-            reject(new Error("Unexpected"));
-        };
-        com2.onincoming = async function(message) {
-            reject(new Error("Unexpected"));
-        };
-        com2.oninvoke = async function(message) {
-            reject(new Error("Unexpected"));
-        };
-
-        let message = com2.invoke(realData, [realData]);
-        await message.wait();
-        if (Equal(message.data, realDataCopy2)) {
-
-        } else {
-            reject(new Error("Unexpected"));
-        }
-
-        message.invoke(realData3);
-        await message.wait();
-        if (Equal(message.data, realDataCopy4)) {
-            resolve("ok");
-        } else {
-            reject(new Error("Unexpected"));
-        }
-    });
-    console.log("Test 15... OK");
-
-
-    //test invoke-invoke-send, ArrayBuffer, split, onincoming callback
-    console.log("Test 16...");
-    await new Promise(async (resolve, reject) => {
-        const realData = RandomArrayBuffer(25000);
-        const realData2 = RandomArrayBuffer(25000);
-        const realData3 = RandomArrayBuffer(25000);
-        const realData4 = RandomArrayBuffer(25000);
-        const realDataCopy = realData.slice(0);
-        const realDataCopy2 = realData2.slice(0);
-        const realDataCopy3 = realData3.slice(0);
-        const realDataCopy4 = realData4.slice(0);
-        console.log(new Uint8Array(realDataCopy));
-        console.log(new Uint8Array(realDataCopy2));
-        console.log(new Uint8Array(realDataCopy3));
-        console.log(new Uint8Array(realDataCopy4));
-        com1.onsend = function(data) {
-            reject(new Error("Unexpected"));
-        };
-        com1.onincoming = async function(message) {
-            await message.wait();
-            console.log("aaaaa", new Uint8Array(message.data));
-            if (Equal(message.data, realDataCopy)) {
-                message.invoke(realData2);
-            } else {
-                reject(new Error("Unexpected"));
-            }
-            message.onincoming = async function(message) {
-                
-                await message.wait();
-                console.log("bbbbbb", new Uint8Array(message.data));
-                if (Equal(message.data, realDataCopy3)) {
-                    message.send(realData4);
-                } else {
-                    reject(new Error("Unexpected"));
-                }
-            };
-        };
-        com1.oninvoke = function(message) {
-            //ignore
-        };
-
-        com2.onsend = function(data) {
-            reject(new Error("Unexpected"));
-        };
-        com2.onincoming = async function(message) {
-            reject(new Error("Unexpected"));
-        };
-        com2.oninvoke = async function(message) {
-            reject(new Error("Unexpected"));
-        };
-
-        let message = com2.invoke(realData, [realData]);
-        await message.wait();
-        if (Equal(message.data, realDataCopy2)) {
-
-        } else {
-            reject(new Error("Unexpected"));
-        }
-        message.invoke(realData3);
-        await message.wait();
-        console.log(new Uint8Array(message.data));
-        if (Equal(message.data, realDataCopy4)) {
-            resolve("ok");
-        } else {
-            reject(new Error("Unexpected"));
-        }
-    });
-    console.log("Test 16... OK");
-
-
 })();
