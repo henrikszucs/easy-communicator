@@ -27,7 +27,7 @@ const com = new Communicator({
     "packetSize": 1000,         //the maximum size of one packet in bytes (only for ArrayBuffer)
     "packetTimeout": 1000,      //the max timeout for packets
     "packetRetry": Infinity,    //number of retring attemts for one packet
-    "sendThreads": 16           //maximum number of the parallel sended pakcets
+    "sendThreads": 16,          //maximum number of the parallel sended pakcets
 
     "timeOffset"                //the time difference between the sender and reciever (sender-reciever), only if you want implement time sync on your own
 });
