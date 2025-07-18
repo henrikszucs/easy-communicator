@@ -1,11 +1,11 @@
 {
     "name": "easy-communicator",
-    "version": "0.9.1",
-    "description": "An API documentation generator for JavaScript.",
+    "version": "1.0.0",
+    "description": "A communication helper library for JavaScript.",
     "keywords": [
         "javascript",
         "communication",
-	"icp"
+	    "icp"
     ],
     "license": "GPL-2.0 license",
     "repository": {
