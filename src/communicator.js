@@ -60,7 +60,7 @@ const Communicator = class {
         }
 
         //set required params and static params
-        if (config["sender"] !== "undefined") {
+        if (typeof config["sender"] !== "undefined") {
             if (typeof config["sender"] === "function") {
                 this.sender = config["sender"];
             } else {
