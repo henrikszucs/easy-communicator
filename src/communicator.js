@@ -164,8 +164,8 @@ const Communicator = class {
                 const buffer = new ArrayBuffer(17);
                 const view = new DataView(buffer);
                 view.setUint8(view.byteLength - 1, 1); //time sync flag
-                view.setFloat64(view.byteLength - 9, Date.now()); //my time
-                view.setFloat64(view.byteLength - 17, -1); //other time
+                view.setFloat32(view.byteLength - 5, Date.now()); //my time
+                view.setFloat32(view.byteLength - 9, -1); //other time
                 this.sender(buffer, [buffer], undefined);
                 
                 
@@ -485,10 +485,10 @@ const Communicator = class {
 
             //handle 2nd layer
             if (isTimeSync) {
-                offset += 8;
-                time1 = view.getFloat64(view.byteLength - offset);
-                offset += 8;
-                time2 = view.getFloat64(view.byteLength - offset);
+                offset += 4;
+                time1 = view.getFloat32(view.byteLength - offset);
+                offset += 4;
+                time2 = view.getFloat32(view.byteLength - offset);
 
             } else if (isSideSync) {
                 offset += 4;
@@ -537,8 +537,8 @@ const Communicator = class {
                 const buffer = new ArrayBuffer(25);
                 const view = new DataView(buffer);
                 view.setUint8(view.byteLength - 1, 1);
-                view.setFloat64(view.byteLength - 9, time1);
-                view.setFloat64(view.byteLength - 17, Date.now());
+                view.setFloat32(view.byteLength - 5, time1);
+                view.setFloat32(view.byteLength - 9, Date.now());
                 this.sender(buffer, [buffer], undefined);
                 return;
             }
