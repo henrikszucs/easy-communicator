@@ -42,7 +42,7 @@ const Communicator = class {
     ERROR = errors;     //error constants
 
     // Public
-    // setup API: configure, release, timeSyncStart, timeSyncStop, timeSync
+    // setup API: configure, release, timeSyncStart, timeSyncStop, timeSync, sideSync
     // com API: send, invoke, receive
     // trigger API: onIncoming, onSend, onInvoke
     constructor(config) {
@@ -125,6 +125,9 @@ const Communicator = class {
     release() {
         //free up every pointer that point to non internal variables
         clearInterval(this.timeSyncIntervalId);
+        for (const [key, message] of this.messages) {
+            message.abort();
+        }
         this.sender = async function(data, transfer, message) {};
         this.messages = new Map();
     };
