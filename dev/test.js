@@ -1015,6 +1015,8 @@ import Communicator from "/src/communicator.js";
     console.log("Test 24...");
     await inactiveProcedure(RandomArrayBuffer(150));
     console.log("Test 24... OK");
+
+    
     
 
     //test abort/reject error
@@ -1410,9 +1412,66 @@ import Communicator from "/src/communicator.js";
 
 
     
+    //test long connectivity
+    com1.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+            }
+            com2.receive(data);
+        },
+        "interactTimeout": 300,
 
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": 2,
+        "sendThreads": 16
+    });
+    com2.configure({
+        "sender": async function(data, transfer) {
+            if (data instanceof ArrayBuffer) {
+                data = new Uint8Array(new Uint8Array(data)).buffer;
+            }
+            com1.receive(data);
+        },
+        "interactTimeout": 300,
 
+        "timeout": 1000,
+        "packetSize": 100,
+        "packetTimeout": 100,
+        "packetRetry": 2,
+        "sendThreads": 16
+    });
+    const sendLongProcedure = async function (data) {
+        return new Promise(async (resolve, reject) => {
+            //store reference values
 
+            com1.onIncoming(async function(message) {
+                if (message.isInvoke === true) {
+                    await message.wait();
+                    await new Promise((resolve) => {
+                        setTimeout(resolve, 200);
+                    });
+                    message.invoke("pong");
+                }
+            });
 
+            const attempts = 20;
+            let i = 0;
+            let message;
+            while (i < attempts) {
+                message = com2.invoke("ping");
+                await message.wait();
+                i++;
+            };
+            message = com2.send("end");
+            await message.wait();
+            resolve("ok");
+        });
+    };
+    console.log("Test 29...");
+    await sendLongProcedure(RandomArrayBuffer(10050));
+    console.log("Test 29... OK");
     return;
 })();
