@@ -96,7 +96,7 @@ const Communicator = class {
             if (typeof config["packetTimeout"] === "number") {
                 this.packetTimeout = config["packetTimeout"];
             } else {
-                throw new Error("'packetRetry' option must be number");
+                throw new Error("'packetTimeout' option must be number");
             }
         }
         if (typeof config["packetRetry"] !== "undefined") {
@@ -164,11 +164,11 @@ const Communicator = class {
                 this.timeSyncResolve(resolve, patience);
 
                 //send
-                const buffer = new ArrayBuffer(17);
+                const buffer = new ArrayBuffer(25);
                 const view = new DataView(buffer);
                 view.setUint8(view.byteLength - 1, 1); //time sync flag
-                view.setFloat32(view.byteLength - 5, Date.now()); //my time
-                view.setFloat32(view.byteLength - 9, -1); //other time
+                view.setFloat64(view.byteLength - 9, Date.now()); //my time
+                view.setFloat64(view.byteLength - 17, -1); //other time
                 this.sender(buffer, [buffer], undefined);
                 
                 
@@ -286,6 +286,7 @@ const Communicator = class {
         if (typeof timeout !== "number") {
             timeout = this.timeout;
         }
+        clearTimeout(messageObj.timeoutId);
         messageObj.timeoutId = setTimeout(() => {
             messageObj.error = this.ERROR.TIMEOUT;
             for (const cb of messageObj.onaborts) {
@@ -336,6 +337,7 @@ const Communicator = class {
             if (typeof timeout !== "number") {
                 timeout = this.timeout;
             }
+            clearTimeout(messageObj.timeoutId);
             messageObj.timeoutId = setTimeout(() => {
                 messageObj.error = this.ERROR.TIMEOUT;
                 for (const cb of messageObj.onaborts) {
@@ -488,11 +490,10 @@ const Communicator = class {
 
             //handle 2nd layer
             if (isTimeSync) {
-                offset += 4;
-                time1 = view.getFloat32(view.byteLength - offset);
-                offset += 4;
-                time2 = view.getFloat32(view.byteLength - offset);
-
+                offset += 8;
+                time1 = view.getFloat64(view.byteLength - offset);
+                offset += 8;
+                time2 = view.getFloat64(view.byteLength - offset);
             } else if (isSideSync) {
                 offset += 4;
                 time = view.getUint32(view.byteLength - offset);
@@ -540,8 +541,8 @@ const Communicator = class {
                 const buffer = new ArrayBuffer(25);
                 const view = new DataView(buffer);
                 view.setUint8(view.byteLength - 1, 1);
-                view.setFloat32(view.byteLength - 5, time1);
-                view.setFloat32(view.byteLength - 9, Date.now());
+                view.setFloat64(view.byteLength - 9, time1);
+                view.setFloat64(view.byteLength - 17, Date.now());
                 this.sender(buffer, [buffer], undefined);
                 return;
             }
@@ -634,7 +635,7 @@ const Communicator = class {
 
                 // move message object
                 messageObj.messageId = messageId;
-                messageObj.isInvoke = (isInvoke === 1 ? true : false);
+                messageObj.isInvoke = isInvoke;
                 messageObj.isAnswer = true;
                 messageObj.packetCount = Infinity;
                 messageObj.packets = new Map();
@@ -887,6 +888,8 @@ const Communicator = class {
     async messageSend(messageObj, msg, transfer) {
         //initial interactivity
         const abort = () => {
+            // this no need trigger
+            console.warn("Inactive timeout", messageObj);
             messageObj.error = this.ERROR.INACTIVE;
             for (const cb of messageObj.onaborts) {
                 cb();
@@ -903,6 +906,7 @@ const Communicator = class {
             }
 
             //update interactivity
+            console.warn("refresh interact", messageObj.interactTimeoutId);
             clearTimeout(messageObj.interactTimeoutId);
             messageObj.interactTimeoutId = setTimeout(abort, this.interactTimeout);
 

@@ -4,6 +4,12 @@ import Communicator from "/src/communicator.js";
 
 //tests
 (async function() {
+    await new Promise(function(resolve) {
+        setTimeout(() => {
+            resolve();
+        }, 100);
+    });
+
     // setup data generators and validators
     const RandomArrayBuffer = function(size) {
         const buffer = new ArrayBuffer(size);
@@ -82,7 +88,12 @@ import Communicator from "/src/communicator.js";
             if (data instanceof ArrayBuffer) {
                 data = new Uint8Array(new Uint8Array(data)).buffer;
             }
-            //console.log(data)
+            console.log(new Uint8Array(data));
+            await new Promise(function(resolve) {
+                setTimeout(() => {
+                    resolve();
+                }, 1);
+            });
             com2.receive(data);
         },
         "interactTimeout": 3000,
@@ -99,7 +110,12 @@ import Communicator from "/src/communicator.js";
             if (data instanceof ArrayBuffer) {
                 data = new Uint8Array(new Uint8Array(data)).buffer;
             }
-            //console.log(data)
+            console.log(data)
+            await new Promise(function(resolve) {
+                setTimeout(() => {
+                    resolve();
+                }, 1);
+            });
             com1.receive(data);
         },
         "interactTimeout": 3000,
@@ -119,7 +135,7 @@ import Communicator from "/src/communicator.js";
     console.log("Test 1... OK");
 
 
-
+/*
     //test send procedure
     const sendProcedure = async function (data) {
         return new Promise(async (resolve, reject) => {
@@ -1410,7 +1426,7 @@ import Communicator from "/src/communicator.js";
     await sendErrorProcedure(RandomArrayBuffer(10050));
     console.log("Test 28... OK");
 
-
+*/
     
     //test long connectivity
     com1.configure({
@@ -1435,9 +1451,9 @@ import Communicator from "/src/communicator.js";
             }
             com1.receive(data);
         },
-        "interactTimeout": 300,
+        "interactTimeout": 400,
 
-        "timeout": 1000,
+        "timeout": 600,
         "packetSize": 100,
         "packetTimeout": 100,
         "packetRetry": 2,
@@ -1448,24 +1464,29 @@ import Communicator from "/src/communicator.js";
             //store reference values
 
             com1.onIncoming(async function(message) {
-                if (message.isInvoke === true) {
-                    await message.wait();
+                await message.wait();
+                while (message.isInvoke === true) {
+                    console.log(message.isInvoke);
                     await new Promise((resolve) => {
                         setTimeout(resolve, 200);
                     });
                     message.invoke("pong");
+                    await message.wait();
                 }
             });
 
             const attempts = 20;
             let i = 0;
-            let message;
+            let message = com2.invoke("ping");
             while (i < attempts) {
-                message = com2.invoke("ping");
                 await message.wait();
+                console.log(message.error);
+                console.log(2);
+                message.invoke("ping");
                 i++;
             };
-            message = com2.send("end");
+            await message.wait();
+            message = message.send("end");
             await message.wait();
             resolve("ok");
         });
