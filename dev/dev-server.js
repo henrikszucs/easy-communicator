@@ -159,12 +159,12 @@ const HTTPServerStart = async function(conf) {
         "key": conf["key"],
         "cert": conf["cert"]
     }, requestHandle);
-    console.log ("    Open server at https://localhost:" + conf["port"]);
+    console.log ("    Open server at https://localhost:" + conf["port"] + "/dev/test.html");
     server.listen(conf["port"]);
     servers.push(server);
     if (typeof conf["redirectFrom"] !== "undefined") {
         const server = http.createServer(redirectHandle);
-        console.log ("    Open redirect at http://localhost:" + conf["redirectFrom"]);
+        console.log ("    Open redirect at http://localhost:" + conf["redirectFrom"] + "/dev/test.html");
         server.listen(conf["redirectFrom"]);
         servers.push(server);
     }

@@ -1,6 +1,6 @@
 {
     "name": "easy-communicator",
-    "version": "1.0.0",
+    "version": "1.0.4",
     "description": "A communication helper library for JavaScript.",
     "keywords": [
         "javascript",

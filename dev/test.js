@@ -135,7 +135,7 @@ import Communicator from "/src/communicator.js";
     console.log("Test 1... OK");
 
 
-/*
+
     //test send procedure
     const sendProcedure = async function (data) {
         return new Promise(async (resolve, reject) => {
@@ -1426,7 +1426,6 @@ import Communicator from "/src/communicator.js";
     await sendErrorProcedure(RandomArrayBuffer(10050));
     console.log("Test 28... OK");
 
-*/
     
     //test long connectivity
     com1.configure({
@@ -1434,11 +1433,16 @@ import Communicator from "/src/communicator.js";
             if (data instanceof ArrayBuffer) {
                 data = new Uint8Array(new Uint8Array(data)).buffer;
             }
+            await new Promise(function(resolve) {
+                setTimeout(() => {
+                    resolve();
+                }, 1);
+            });
             com2.receive(data);
         },
-        "interactTimeout": 300,
+        "interactTimeout": 2000,
 
-        "timeout": 1000,
+        "timeout": 600000,
         "packetSize": 100,
         "packetTimeout": 100,
         "packetRetry": 2,
@@ -1449,13 +1453,19 @@ import Communicator from "/src/communicator.js";
             if (data instanceof ArrayBuffer) {
                 data = new Uint8Array(new Uint8Array(data)).buffer;
             }
+            await new Promise(function(resolve) {
+                setTimeout(() => {
+                    resolve();
+                }, 1);
+            });
+            console.log(data);
             com1.receive(data);
         },
-        "interactTimeout": 400,
+        "interactTimeout": 2001,
 
-        "timeout": 600,
-        "packetSize": 100,
-        "packetTimeout": 100,
+        "timeout": 600000,
+        "packetSize": 1000,
+        "packetTimeout": 1000,
         "packetRetry": 2,
         "sendThreads": 16
     });
@@ -1463,31 +1473,33 @@ import Communicator from "/src/communicator.js";
         return new Promise(async (resolve, reject) => {
             //store reference values
 
-            com1.onIncoming(async function(message) {
-                await message.wait();
-                while (message.isInvoke === true) {
-                    console.log(message.isInvoke);
+            com2.onIncoming(async function(messageObj) {
+                let a = 0;
+                await messageObj.wait();
+                while (messageObj.isInvoke === true) {
+                    console.log(messageObj.isInvoke);
                     await new Promise((resolve) => {
                         setTimeout(resolve, 200);
                     });
-                    message.invoke("pong");
-                    await message.wait();
+                    messageObj.invoke("pong");
+                    await messageObj.wait();
+                    console.log(a++);
                 }
             });
 
             const attempts = 20;
             let i = 0;
-            let message = com2.invoke("ping");
+            let messageObj = com1.invoke("ping");
             while (i < attempts) {
-                await message.wait();
-                console.log(message.error);
-                console.log(2);
-                message.invoke("ping");
+                await messageObj.wait();
+                console.log(messageObj.error);
+                console.log(i);
+                messageObj.invoke("ping");
                 i++;
             };
-            await message.wait();
-            message = message.send("end");
-            await message.wait();
+            await messageObj.wait();
+            messageObj = messageObj.send("end");
+            await messageObj.wait();
             resolve("ok");
         });
     };

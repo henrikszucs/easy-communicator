@@ -297,7 +297,6 @@ const Communicator = class {
         //send data
         await this.messageSend(messageObj, msg, transfer);
         if (messageObj.error === this.ERROR.ABORT) {
-            console.log(messageObj.error)
             const sendTime = (Date.now() + this.timeOffset) % 4294967295; //32 bit time
             const data = new Uint8Array(9);
             const view = new DataView(data.buffer);
@@ -586,6 +585,7 @@ const Communicator = class {
         // delete outdated packets
         const now = Date.now() % 4294967295 - 100;
         if (sendTime < now || now - sendTime > this.interactTimeout) {
+            console.warn("outdated packet", sendTime, now);
             return;
         }
 
@@ -621,13 +621,14 @@ const Communicator = class {
                 //console.log(isAnswer);
                 // check the parent object (and not moved yet)
                 messageObj = this.messages.get(answerFor);
-
+                
                 // exit if no parent
                 if (messageObj === undefined) {
+                    
                     return;
                 }
 
-                // finsh outgoing sendings
+                // finish outgoing sendings
                 const iterator1 = messageObj.onpackets[Symbol.iterator]();
                 for (const [key, val] of iterator1) {
                     val();
@@ -885,11 +886,13 @@ const Communicator = class {
             this.messages.set(messageObj.messageId, messageObj);
         }
     };
+    test = 0;
     async messageSend(messageObj, msg, transfer) {
         //initial interactivity
+        const test = Date.now();
+        const test0 = this.test;
+        this.test++;
         const abort = () => {
-            // this no need trigger
-            console.warn("Inactive timeout", messageObj);
             messageObj.error = this.ERROR.INACTIVE;
             for (const cb of messageObj.onaborts) {
                 cb();
@@ -897,7 +900,7 @@ const Communicator = class {
         };
         clearTimeout(messageObj.interactTimeoutId);
         messageObj.interactTimeoutId = setTimeout(abort, this.interactTimeout);
-
+    
         //message listener
         messageObj.onreceive = (isAbort, packetId) => {
             //no communication if error
@@ -906,7 +909,6 @@ const Communicator = class {
             }
 
             //update interactivity
-            console.warn("refresh interact", messageObj.interactTimeoutId);
             clearTimeout(messageObj.interactTimeoutId);
             messageObj.interactTimeoutId = setTimeout(abort, this.interactTimeout);
 
@@ -1137,6 +1139,8 @@ const Communicator = class {
         });
     };
     async messageFree(messageObj) {
+        const messageId = messageObj.messageId;
+
         //stop timers
         clearTimeout(messageObj.timeoutId);
         clearTimeout(messageObj.interactTimeoutId);
@@ -1147,7 +1151,7 @@ const Communicator = class {
         });
 
         //free from global stack
-        this.messages.delete(messageObj.messageId);
+        this.messages.delete(messageId);
     };
 };
 
