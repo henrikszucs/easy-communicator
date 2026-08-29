@@ -7,7 +7,7 @@
         "communication",
 	    "icp"
     ],
-    "license": "GPL-2.0 license",
+    "license": "LGPL-3.0-only",
     "repository": {
         "type": "git",
         "url": "https://github.com/henrikszucs/easy-communicator"
