@@ -1,6 +1,6 @@
 {
     "name": "easy-communicator",
-    "version": "1.1.5",
+    "version": "1.2.0",
     "description": "A communication helper library for JavaScript.",
     "keywords": [
         "javascript",
@@ -20,7 +20,8 @@
         }
     ],
     "scripts": {
-        "dev-server": "node dev/dev-server.js"
+        "dev-server": "node dev/dev-server.js",
+        "test": "node --test \"tests/**/*.test.js\""
     },
     "type": "module",
     "exports": {
