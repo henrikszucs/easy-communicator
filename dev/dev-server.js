@@ -5,7 +5,7 @@ import * as fs from "node:fs/promises";
 import * as http from "node:http";
 import * as https from "node:https";
 
-import { MIME } from "./mime.js";
+import { getMIMEType } from "easy-mime";
 
 const thisDirPath = import.meta.dirname;
 
@@ -24,7 +24,7 @@ const getFileData = async function(src) {
         const date = new Date(stats.mtimeMs);
         return {
             "lastModified": date.toUTCString(),
-            "type": MIME.getMIMEType(path.extname(src)),
+            "type": getMIMEType(path.extname(src)),
             "size": stats.size,
             "buffer": data
         };
@@ -61,7 +61,7 @@ const getFileDataStream = async function(src) {
         
         return {
             "lastModified": date.toUTCString(),
-            "type": MIME.getMIMEType(path.extname(src)),
+            "type": getMIMEType(path.extname(src)),
             "size": stats.size,
             "stream": stream
         };

@@ -43,6 +43,7 @@
         "src"
     ],
     "devDependencies": {
+        "easy-mime": "github:henrikszucs/easy-mime#v1.1.0",
         "esbuild": "^0.28.2"
     }
 }

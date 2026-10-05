@@ -172,3 +172,7 @@ com.ERROR.REJECT;
 com.ERROR.TRANSFER_SEND;
 com.ERROR.TRANSFER_RECEIVE;
 ```
+
+## License
+
+[LGPL-3.0-only](./LICENSE) — see also the referenced [GPL-3.0](./LICENSE.GPL-3.0).
