@@ -5,7 +5,7 @@
     "keywords": [
         "javascript",
         "communication",
-	    "icp"
+        "icp"
     ],
     "license": "LGPL-3.0-only",
     "repository": {
@@ -20,11 +20,29 @@
         }
     ],
     "scripts": {
+        "build": "node dev/build.js",
         "dev-server": "node dev/dev-server.js",
-        "test": "node --test \"tests/**/*.test.js\""
+        "test": "node --test \"tests/**/*.test.js\"",
+        "prepublishOnly": "npm run build && npm test"
     },
     "type": "module",
+    "main": "./dist/communicator.cjs",
+    "module": "./dist/communicator.js",
     "exports": {
-        ".": "./src/communicator.js"
+        ".": {
+            "import": "./dist/communicator.js",
+            "require": "./dist/communicator.cjs"
+        },
+        "./min": "./dist/communicator.min.js",
+        "./iife": "./dist/communicator.iife.min.js",
+        "./src": "./src/communicator.js",
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist",
+        "src"
+    ],
+    "devDependencies": {
+        "esbuild": "^0.28.2"
     }
 }

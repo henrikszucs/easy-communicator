@@ -4,9 +4,34 @@ JavaScript library to handle one or two way communication in any type of channel
 
 ## Install
 
-Copy and import the following file:
+```
+npm install easy-communicator
+```
 
-[./src/communicator.js](./src/communicator.js)
+```js
+import Communicator from "easy-communicator";                 // ES module
+const { Communicator } = require("easy-communicator");        // CommonJS
+```
+
+Or copy one of the prebuilt files from [./dist](./dist):
+
+| File | Format |
+| --- | --- |
+| `communicator.js` | ES module |
+| `communicator.min.js` | ES module, minified |
+| `communicator.cjs` | CommonJS |
+| `communicator.iife.min.js` | classic `<script>`, sets the global `Communicator` |
+
+The unbuilt source is [./src/communicator.js](./src/communicator.js) (also importable as `easy-communicator/src`).
+
+## Build
+
+```
+npm install
+npm run build
+```
+
+The build writes every file above into `dist` with [esbuild](https://esbuild.github.io); the `.min.js` files come with source maps that point back to `src`.
 
 ## Usage
 
